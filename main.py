@@ -3,6 +3,7 @@ import configparser
 from re import sub
 from types import MethodType
 from dataclasses import dataclass, field
+import bs4
 
 import requests as rq
 from bs4 import BeautifulSoup, element
@@ -11,6 +12,7 @@ from bs4 import BeautifulSoup, element
 @dataclass
 class Task:
     id: int
+    description: str
     title: str
     state: str
     start: str
@@ -24,6 +26,7 @@ Tasks = list[Task]
 class Course:
     "コース"
     course_name: str
+    # course_id: int
     tasks: Tasks
 
     def __add__(self, other):
@@ -85,8 +88,11 @@ def main():
     couses_have_tasks += get_tasks(session, base_url, courses, '_query')
     couses_have_tasks += get_tasks(session, base_url, courses, '_survey')
 
-    for item in couses_have_tasks:
-        print(item)
+    for course in couses_have_tasks:
+        print(course)
+        # for task in course.tasks:
+        #     print('-'*20)
+        #     print(task.description)
 
 
 def get_tasks(session: rq.Session, base_url: str, courses: Courses, query: str) -> Courses:
@@ -108,10 +114,16 @@ def get_tasks(session: rq.Session, base_url: str, courses: Courses, query: str) 
                 state: element.Tag
                 start: element.Tag
                 end: element.Tag
+                description: element.Tag
                 title, state, start, end = item.find_all('td')
                 if is_unsubmitted(state, query):
+
+                    id = title.find('a').get('href').split('_')[-1]
+                    description = get_description(session, report_url, id)
+
                     t = Task(
-                        id=int(title.find('a').get('href').split('_')[-1]),
+                        id=int(id),
+                        description=description,
                         title=title.find('a').get_text(),
                         state=state.find('span', class_='deadline').get_text(),
                         start=start.get_text(),
@@ -144,6 +156,20 @@ def is_unsubmitted(state: element.Tag, query: str) -> bool:
     if acception == '受付中' and submission == '未提出':
         return True
     return False
+
+
+def get_description(session: rq.Session, report_url: str, id: str) -> str:
+    "課題のページから説明を取得"
+    url = report_url + '_' + id
+    page = BeautifulSoup(session.get(url).text, 'lxml')
+    table: element.Tag = page.find('table')
+    if not table:
+        return ""
+    tr: element.Tag = table.find('tr', class_='row1')
+    if not tr:
+        return ""   
+    td: element.Tag = tr.find('td', class_='left')
+    return td.text
 
 
 if __name__ == '__main__':
