@@ -8,6 +8,10 @@ pip install -r requirements.txt
 vim config.ini # 学籍番号とパスワード
 python main.py
 ```
+出力例 次回修正でmd形式に吐き出す機能を追加予定
+![20210516003100](https://user-images.githubusercontent.com/48282855/118369405-2c910200-b5de-11eb-85a4-d4fb71bff8c3.png)
+
+
 ## 要件
 - [x] [manaba](https://manaba.fun.ac.jp/ct/home) にログインして、セッションを握る
 - [x] (未提出の)課題一覧を取得する
