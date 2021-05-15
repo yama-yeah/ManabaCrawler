@@ -89,7 +89,7 @@ def main():
     couses_have_tasks += get_tasks(session, base_url, courses, '_survey')
 
     for item in couses_have_tasks:
-        print(item)
+        print(item.tasks[0].description)
 
 
 def get_tasks(session: rq.Session, base_url: str, courses: Courses, query: str) -> Courses:
