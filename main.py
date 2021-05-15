@@ -1,5 +1,8 @@
+from collections import UserList
 import configparser
-from dataclasses import dataclass
+from re import sub
+from types import MethodType
+from dataclasses import dataclass, field
 
 import requests as rq
 from bs4 import BeautifulSoup, element
@@ -23,8 +26,33 @@ class Course:
     course_name: str
     tasks: Tasks
 
+    def __add__(self, other):
+        other: Course
+        if self.course_name == other.course_name:
+            self.tasks += other.tasks
+
 
 Courses = list[Course]
+
+
+@dataclass
+class Courses(UserList):
+    data: list[Course] = field(default_factory=list)
+
+    def __add__(self, other: Courses):
+        for item in other:
+            item: Course
+            # 科目名が含まれているとき
+            if (idx := self.get_index(item.course_name)) != -1:
+                self.data[idx] += item
+            else:
+                self.data.append(item)
+
+    def get_index(self, course_name: str) -> int:
+        course_name_list = [cn.course_name for cn in self.data]
+        if course_name in course_name_list:
+            return self.data.index(course_name)
+        return -1
 
 
 def main():
@@ -48,37 +76,75 @@ def main():
     couses_have_tasks = Courses()
 
     bs = BeautifulSoup(login.text, 'lxml')
-    courses = bs.find_all('td', class_='course')
-    for course in courses:
-        if course.find('a'):
-            report_url: str = base_url + course.find('a').get('href') + '_report'
-            report = BeautifulSoup(session.get(report_url).text, 'lxml')
-            course_name: str = report.find('a', id='coursename').get_text()
-            table = report.find_all('table', class_='stdlist')
-            for row in table:
-                row: element.Tag
-                reports: list[element.Tag] = row.find_all('tr')[1:]
-                un_submitted_tasks = Tasks()
-                for item in reports:
-                    title: element.Tag
-                    state: element.Tag
-                    start: element.Tag
-                    end: element.Tag
-                    title, state, start, end = item.find_all('td')
-                    if state.find('div').get_text() == '受付中' and state.find('span', class_='deadline').get_text() == '未提出':
-                        t = Task(
-                            id=int(title.find('a').get('href').split('_')[-1]),
-                            title=title.find('a').get_text(),
-                            state=state.find(
-                                'span', class_='deadline').get_text(),
-                            start=start.get_text(),
-                            end=end.get_text()
-                        )
-                        un_submitted_tasks.append(t)
-                couses_have_tasks.append(Course(course_name=course_name, tasks=un_submitted_tasks))
+
+    courses = [course for course in
+               bs.find_all('td', class_='course')
+               if course.find('a')]
+
+    couses_have_tasks += get_tasks(session, base_url, courses, '_report')
+    couses_have_tasks += get_tasks(session, base_url, courses, '_query')
+    couses_have_tasks += get_tasks(session, base_url, courses, '_survey')
 
     for item in couses_have_tasks:
         print(item)
+
+
+def get_tasks(session: rq.Session, base_url: str, courses: Courses, query: str) -> Courses:
+    couses_have_tasks = Courses()
+    for course in courses:
+        report_url: str = base_url + course.find('a').get('href') + query
+        report = BeautifulSoup(session.get(report_url).text, 'lxml')
+        course_name: str = report.find('a', id='coursename').get_text()
+        table = report.find_all('table', class_='stdlist')
+        for row in table:
+            row: element.Tag
+            # 0 は項目、１以降が実際の課題
+            reports: list[element.Tag] = row.find_all('tr')[1:]
+            # print(reports)
+
+            un_submitted_tasks = Tasks()
+            for item in reports:
+                title: element.Tag
+                state: element.Tag
+                start: element.Tag
+                end: element.Tag
+                title, state, start, end = item.find_all('td')
+                if is_unsubmitted(state, query):
+                    t = Task(
+                        id=int(title.find('a').get('href').split('_')[-1]),
+                        title=title.find('a').get_text(),
+                        state=state.find('span', class_='deadline').get_text(),
+                        start=start.get_text(),
+                        end=end.get_text()
+                    )
+                    un_submitted_tasks.append(t)
+
+            if (c := Course(course_name=course_name, tasks=un_submitted_tasks)).tasks:
+                couses_have_tasks.append(c)
+    return couses_have_tasks
+
+
+def is_unsubmitted(state: element.Tag, query: str) -> bool:
+    "受付中かつ未提出"
+    acception: str
+    submission: str
+    if query == '_report':
+        if (div := state.find('div')) and (deadline := state.find('span', class_='deadline')):
+            acception = div.get_text()
+            submission = deadline.get_text()
+        else:
+            return False
+    if query in ['_query', '_survey']:
+        if (td := state.get_text()) and (deadline := state.find('span', class_='deadline')):
+            # 構造が悪い
+            acception, submission = td.strip().split()
+        else:
+            return False
+
+    if acception == '受付中' and submission == '未提出':
+        return True
+    return False
+
 
 if __name__ == '__main__':
     main()
