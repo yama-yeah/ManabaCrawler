@@ -88,8 +88,11 @@ def main():
     couses_have_tasks += get_tasks(session, base_url, courses, '_query')
     couses_have_tasks += get_tasks(session, base_url, courses, '_survey')
 
-    for item in couses_have_tasks:
-        print(item.tasks[0].description)
+    for course in couses_have_tasks:
+        # print(course.tasks)
+        for task in course.tasks:
+            print('-'*20)
+            print(task.description)
 
 
 def get_tasks(session: rq.Session, base_url: str, courses: Courses, query: str) -> Courses:
@@ -158,7 +161,6 @@ def is_unsubmitted(state: element.Tag, query: str) -> bool:
 def get_description(session: rq.Session, report_url: str, id: str) -> str:
     "課題のページから説明を取得"
     url = report_url + '_' + id
-    print(url)
     page = BeautifulSoup(session.get(url).text, 'lxml')
     table: element.Tag = page.find('table')
     if not table:
