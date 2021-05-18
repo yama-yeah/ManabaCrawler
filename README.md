@@ -1,6 +1,8 @@
 # ManabaCrawler
 manabaをcrawlするやつ
 
+**required python3.9<=**
+
 ```bash
 git clone https://github.com/t4t5u0/ManabaCrawler
 cd ManabaCrawler
