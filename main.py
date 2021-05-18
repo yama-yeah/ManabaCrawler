@@ -1,10 +1,9 @@
-from collections import UserList
+from collections import UserList, defaultdict
 import configparser
 from re import sub
 from types import MethodType
 from dataclasses import dataclass, field
 import bs4
-
 import requests as rq
 from bs4 import BeautifulSoup, element
 
@@ -83,16 +82,17 @@ def main():
     courses = [course for course in
                bs.find_all('td', class_='course')
                if course.find('a')]
+    # print(courses[0])
 
     couses_have_tasks += get_tasks(session, base_url, courses, '_report')
     couses_have_tasks += get_tasks(session, base_url, courses, '_query')
     couses_have_tasks += get_tasks(session, base_url, courses, '_survey')
-
-    for course in couses_have_tasks:
-        print(course)
-        # for task in course.tasks:
-        #     print('-'*20)
-        #     print(task.description)
+    # for course in couses_have_tasks:
+    # print(course)
+    # for task in course.tasks:
+    #     print('-'*20)
+    # print(task)
+    print(couses_have_tasks[2])
 
 
 def get_tasks(session: rq.Session, base_url: str, courses: Courses, query: str) -> Courses:
@@ -167,10 +167,79 @@ def get_description(session: rq.Session, report_url: str, id: str) -> str:
         return ""
     tr: element.Tag = table.find('tr', class_='row1')
     if not tr:
-        return ""   
+        return ""
     td: element.Tag = tr.find('td', class_='left')
     return td.text
 
 
+def make_dictionary(couses_have_tasks):
+    #convert Course to dic 
+    #original data style
+    '''
+    Course(
+        course_name='線形代数学Ⅰ 1-IJKL', 
+        tasks=[Task(id=104270, description='', 
+        title='演習課題５', state='未提出', 
+        start='2021-05-17 18:00', 
+        end='2021-05-21 00:00')]
+    )'''
+    #dic style
+    '''
+    dic{
+        COURSE_NAME{
+            TASK_NAME{
+                {state},
+                {start},
+                {end}
+            }
+        }
+    }
+    '''
+    dic = defaultdict(lambda: dict())
+    for course in couses_have_tasks:
+        for task in course.tasks:
+            task_dic = {}  # task内容を記述
+            task_dic['state'] = task.state
+            task_dic['start'] = task.start
+            task_dic['end'] = task.end
+            dic[course.course_name][task.title] = task_dic
+    return dic
+
+
+def app(userid, password):
+    #config = configparser.ConfigParser()
+    # config.read('./config.ini')
+    USERID = userid
+    PASSWORD = password
+
+    base_url = 'https://manaba.fun.ac.jp/ct/'
+    url = base_url + 'login'
+    login_data = {
+        'userid': USERID,
+        'password': PASSWORD
+    }
+
+    session = rq.session()
+    session.get(url)
+
+    login = session.post(url, data=login_data)
+
+    couses_have_tasks = Courses()
+
+    bs = BeautifulSoup(login.text, 'lxml')
+
+    courses = [course for course in
+               bs.find_all('td', class_='course')
+               if course.find('a')]
+
+    couses_have_tasks += get_tasks(session, base_url, courses, '_report')
+    couses_have_tasks += get_tasks(session, base_url, courses, '_query')
+    couses_have_tasks += get_tasks(session, base_url, courses, '_survey')
+    # print(couses_have_tasks)
+    dic = make_dictionary(couses_have_tasks)
+    return dic
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    print(app())
